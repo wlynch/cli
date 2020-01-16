@@ -175,6 +175,7 @@ func startTask(opt startOptions, args []string) error {
 		}
 	}
 	tr.ObjectMeta.GenerateName = tname + "-run-"
+	addParentLabels(tr)
 
 	cs, err := opt.cliparams.Clients()
 	if err != nil {
@@ -283,4 +284,31 @@ func parseRes(res []string) (map[string]v1alpha1.TaskResourceBinding, error) {
 		}
 	}
 	return resources, nil
+}
+
+// Add labels to the task run
+func addParentLabels(tr *v1alpha1.TaskRun) {
+	b, err := ioutil.ReadFile("/builder/logCfg/labels")
+	if err != nil {
+		fmt.Println("error reading labels: %v", err)
+		return
+	}
+	labels := map[string]string{}
+	for _, l := range strings.Split(string(b), "\n") {
+		parts := strings.SplitN(l, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		if !strings.HasPrefix(parts[0], "tekton.dev/") {
+			continue
+		}
+		labels[parts[0]] = strings.Trim(parts[1], "\"")
+	}
+	if tr.ObjectMeta.Labels == nil {
+		tr.ObjectMeta.Labels = make(map[string]string, len(labels))
+	}
+
+	for k, v := range labels {
+		tr.ObjectMeta.Labels[fmt.Sprintf("parent.%s", k)] = v
+	}
 }
